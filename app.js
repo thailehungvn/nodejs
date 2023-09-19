@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
+const cors = require('cors');
 require('dotenv').config();
 
 const indexRouter = require('./routes/index');
@@ -25,13 +26,20 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Add CORS here
+app.use(
+  cors({
+    origin: '*',
+  }),
+);
+
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/welcome', welcomeRouter);
 
-app.use('/product', productRouter);
-app.use('/category', categoryRouter);
-app.use('/supplier', supplierRouter);
+app.use('/products', productRouter);
+app.use('/categories', categoryRouter);
+app.use('/suppliers', supplierRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
