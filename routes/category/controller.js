@@ -1,11 +1,5 @@
-const { default: mongoose } = require('mongoose');
-
 const { Category } = require('../../models');
-const { generationID, writeFileSync, fuzzySearch, combineObjects } = require('../../helper');
-let categories = require('../../data/categories.json');
-
-// mongoose.connect('mongodb://localhost:27017/nodejs');
-mongoose.connect('mongodb://127.0.0.1:27017/nodejs');
+const { fuzzySearch } = require('../../helper');
 
 module.exports = {
   getAll: async (req, res, next) => {
@@ -118,8 +112,6 @@ module.exports = {
       { isDeleted: true },
       { new: true },
     );
-
-    console.log('««««« result »»»»»', result);
 
     if (result) {
       return res.send(200, {
