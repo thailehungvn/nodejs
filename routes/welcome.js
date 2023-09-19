@@ -3,7 +3,7 @@ var router = express.Router();
 
 /* GET users listing. */
 router.get('/', function(req, res, next) {
-  res.send('CHÀO MỪNG BẠN ĐẾN VỚI HỆ THỐNG ');
+  res.send('Chào mừng đến với hệ thống');
 });
 
 module.exports = router;
