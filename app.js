@@ -5,7 +5,6 @@ const cookieParser = require('cookie-parser');
 const logger = require('morgan');
 require('dotenv').config();
 
-// KHAI BÁO
 const indexRouter = require('./routes/index');
 const usersRouter = require('./routes/users');
 const welcomeRouter = require('./routes/welcome');
@@ -23,8 +22,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-
-// KHAI BÁO
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/welcome', welcomeRouter);
