@@ -38,7 +38,9 @@ app.use(
   }),
 );
 
-mongoose.connect('mongodb://127.0.0.1:27017/nodejs');
+mongoose.connect(`${process.env.DATABASE_URL}${process.env.DATABASE_NAME}`);
+console.log(' MongoDB running');
+
 
 app.use('/', indexRouter);
 
