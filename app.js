@@ -6,6 +6,7 @@ const logger = require('morgan');
 const cors = require('cors');
 const { default: mongoose } = require('mongoose');
 require('dotenv').config();
+const passport = require('passport');
 
 const indexRouter = require('./routes/index');
 
@@ -14,10 +15,17 @@ const categoryRouter = require('./routes/category/router');
 const supplierRouter = require('./routes/supplier/router');
 const customerRouter = require('./routes/customer/router');
 const employeeRouter = require('./routes/employee/router');
+const authRouter = require('./routes/auth/router');
 
 const orderRouter = require('./routes/order/router');
 const cartRouter = require('./routes/cart/router');
 const questionsRouter = require('./routes/questions/router');
+
+const {
+  passportVerifyToken,
+  passportVerifyAccount,
+  passportConfigBasic,
+} = require('./middlewares/passport');
 
 const app = express();
 
@@ -40,15 +48,21 @@ app.use(
 
 mongoose.connect(`${process.env.DATABASE_URL}${process.env.DATABASE_NAME}`);
 
+passport.use(passportVerifyToken);
+passport.use(passportVerifyAccount);
+passport.use(passportConfigBasic);
+
 app.use('/', indexRouter);
 
-app.use('/products', productRouter);
-app.use('/categories', categoryRouter);
-app.use('/suppliers', supplierRouter);
+app.use('/products', passport.authenticate('jwt', { session: false }), productRouter);
+app.use('/categories', passport.authenticate('jwt', { session: false }), categoryRouter);
+app.use('/suppliers', passport.authenticate('jwt', { session: false }), supplierRouter);
 app.use('/cart', cartRouter);
-app.use('/customers', customerRouter);
-app.use('/employees', employeeRouter);
-app.use('/orders', orderRouter);
+app.use('/customers', passport.authenticate('jwt', { session: false }), customerRouter);
+app.use('/employees', passport.authenticate('jwt', { session: false }), employeeRouter);
+app.use('/auth', authRouter);
+app.use('/orders', passport.authenticate('jwt', { session: false }), orderRouter);
+
 app.use('/questions', questionsRouter);
 
 // catch 404 and forward to error handler

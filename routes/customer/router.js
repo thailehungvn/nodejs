@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const passport = require('passport');
 
 const { validateSchema } = require('../../helper');
 const {
@@ -16,7 +17,10 @@ const {
 
 router.route('/')
   .get(getAll)
-  .post(validateSchema(createSchema), create)
+  .post(validateSchema(createSchema), create) // ADMIN TẠO TÀI KHOẢN CHO NGƯỜI DÙNG
+
+router.route('/register')
+  .post(validateSchema(createSchema), create) // ADMIN TẠO TÀI KHOẢN CHO NGƯỜI DÙNG
 
 router.route('/:id')
   .get(validateSchema(getDetailSchema), getDetail)
