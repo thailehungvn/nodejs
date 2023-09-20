@@ -39,8 +39,6 @@ app.use(
 );
 
 mongoose.connect(`${process.env.DATABASE_URL}${process.env.DATABASE_NAME}`);
-console.log(' MongoDB running');
-
 
 app.use('/', indexRouter);
 

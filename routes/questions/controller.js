@@ -165,9 +165,7 @@ module.exports = {
 
       const d = { $divide: [m, 100] }; // price * 90 / 100
 
-      const conditionFind = { $expr: { $lte: [d, parseFloat(40000)] } };
-
-      console.log('««««« conditionFind »»»»»', conditionFind);
+      const conditionFind = { $expr: { $lte: [d, 1000] } };
 
       let results = await Product.find(conditionFind)
         .select('-categoryId -supplierId -description')
@@ -179,7 +177,7 @@ module.exports = {
       //     ...item,
       //     dis,
       //   }
-      // }).filter((item) => item.dis >= 40000);
+      // }).filter((item) => item.dis <= 1000);
 
       // console.log('««««« newResults »»»»»', newResults);
 
@@ -238,9 +236,14 @@ module.exports = {
       // ]);
       // aggregate([])
 
-      let results = await Product.aggregate().match({
-        $expr: { $lte: [d, parseFloat(40000)] },
-      });
+      let results = await Product.aggregate([
+        {
+          $match: { $expr: { $lte: [d, 1000] } },
+        },
+      ]);
+
+      // let results = await Product.aggregate()
+      // .match({ $expr: { $lte: [d, 1000] }});
 
       let total = await Product.countDocuments();
 
@@ -264,7 +267,7 @@ module.exports = {
       // let results = await Product.aggregate([
       //   { $addFields: { disPrice: d } },
       //   {
-      //     $match: { $expr: { $lte: ['$disPrice', parseFloat(40000)] } },
+      //     $match: { $expr: { $lte: ['$disPrice', 1000] } },
       //   },
       //   {
       //     $project: {
@@ -277,11 +280,73 @@ module.exports = {
 
       let results = await Product.aggregate()
         .addFields({ disPrice: d })
-        .match({ $expr: { $lte: ['$disPrice', parseFloat(40000)] } })
+        .match({ $expr: { $lte: ['$disPrice', 1000] } })
         .project({
           categoryId: 0,
           supplierId: 0,
           description: 0,
+          isDeleted: 0,
+        });
+
+      let total = await Product.countDocuments();
+
+      return res.send({
+        code: 200,
+        total,
+        totalResult: results.length,
+        payload: results,
+      });
+    } catch (err) {
+      console.log('««««« err »»»»»', err);
+      return res.status(500).json({ code: 500, error: err });
+    }
+  },
+
+  question3d: async (req, res, next) => {
+    try {
+      const s = { $subtract: [100, '$discount'] }; // (100 - 10) s => 90
+      const m = { $multiply: ['$price', s] }; // price * 90
+      const d = { $divide: [m, 100] }; // price * 90 / 100
+
+      // let results = await Product.aggregate([
+      //   { $addFields: { disPrice: d } },
+      //   {
+      //     $match: { $expr: { $lte: ['$disPrice', 1000] } },
+      //   },
+      //   {
+      //     $project: {
+      //       categoryId: 0,
+      //       supplierId: 0,
+      //       description: 0,
+      //     },
+      //   },
+      // ]);
+
+      let results = await Product.aggregate()
+        .addFields({ disPrice: d })
+        .match({ $expr: { $lte: ['$disPrice', 1000] } })
+        .lookup({
+          from: 'categories',
+          localField: 'categoryId',
+          foreignField: '_id',
+          as: 'categories',
+        })
+        // .unwind('categories')
+        .lookup({
+          from: 'suppliers',
+          localField: 'supplierId',
+          foreignField: '_id',
+          as: 'suppliers',
+        })
+        // .unwind('suppliers')
+        .project({
+          categoryId: 0,
+          supplierId: 0,
+          description: 0,
+          isDeleted: 0,
+          suppliers: {
+            isDeleted: 0,
+          },
         });
 
       let total = await Product.countDocuments();
@@ -303,7 +368,7 @@ module.exports = {
       const { address } = req.query;
 
       const conditionFind = {
-        address: { $regex: new RegExp(`${address}`), $options: 'i' },
+        address: fuzzySearch(address),
       };
       // const conditionFind = { address: new RegExp(`${address}`) };
       // const conditionFind = { address: {$eq: address } };
@@ -658,12 +723,6 @@ module.exports = {
   question18: async (req, res, next) => {
     try {
       let results = await Category.aggregate()
-        // .lookup({ // so sánh
-        //   from: 'customers',
-        //   localField: 'customerId',
-        //   foreignField: '_id',
-        //   as: 'customer'
-        // })
         .lookup({
           from: 'products',
           localField: '_id', // TRUY VẤN NGƯỢC!!!
@@ -680,7 +739,8 @@ module.exports = {
           name: { $first: '$name' },
           description: { $first: '$description' },
           totalProduct: {
-            $sum: '$products.stock',
+            // $sum: '$products.stock',
+            $sum: 1,
           },
         })
         .sort({
@@ -758,7 +818,7 @@ module.exports = {
       let results = await Order.aggregate()
         .match({
           ...conditionFind,
-          status: { $in: ['COMPLETE'] },
+          status: { $in: ['WAITING'] },
         })
         .unwind('orderDetails')
         .lookup({
@@ -771,9 +831,10 @@ module.exports = {
         .group({
           _id: '$orderDetails.productId',
           name: { $first: '$orderDetails.product.name' },
-          price: { $first: '$orderDetails.product.price' },
+          price: { $first: '$orderDetails.product.pric e' },
           discount: { $first: '$orderDetails.product.discount' },
           stock: { $first: '$orderDetails.product.stock' },
+          countSale: { $sum: '$orderDetails.quantity' },
           count: { $sum: 1 },
         });
 
@@ -836,10 +897,11 @@ module.exports = {
 
       let results = await Order.aggregate()
         .match(conditionFind)
-        .unwind({
-          path: '$orderDetails',
-          preserveNullAndEmptyArrays: true,
-        })
+        // .unwind({
+        //   path: '$orderDetails',
+        //   preserveNullAndEmptyArrays: true,
+        // })
+        .unwind('orderDetails')
         .addFields({
           total: {
             $sum: {
@@ -856,10 +918,10 @@ module.exports = {
             },
           },
         })
-      .group({
-        _id: '$customerId',
-        total: { $sum: '$total' },
-      });
+        .group({
+          _id: '$customerId',
+          totalMoney: { $sum: '$total' },
+        });
 
       let total = await Order.countDocuments();
 
@@ -902,10 +964,10 @@ module.exports = {
             },
           },
         })
-      .group({
-        _id: null,
-        total: { $sum: '$total' },
-      });
+        .group({
+          _id: null,
+          total: { $sum: '$total' },
+        });
 
       let total = await Order.countDocuments();
 
@@ -948,25 +1010,25 @@ module.exports = {
             },
           },
         })
-      .group({
-        _id: '$employeeId',
-        total: { $sum: '$total' },
-      })
-      .lookup({
-        from: 'employees',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'employee',
-      })
-      .unwind('employee')
-      .project({
-        totalPrice: '$total',
-        firstName: '$employee.firstName',
-        lastName: '$employee.lastName',
-        phoneNumber: '$employee.phoneNumber',
-        address: '$employee.address',
-        email : '$employee.email ',
-      })
+        .group({
+          _id: '$employeeId',
+          total: { $sum: '$total' },
+        })
+        .lookup({
+          from: 'employees',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'employee',
+        })
+        .unwind('employee')
+        .project({
+          totalPrice: '$total',
+          firstName: '$employee.firstName',
+          lastName: '$employee.lastName',
+          phoneNumber: '$employee.phoneNumber',
+          address: '$employee.address',
+          email: '$employee.email ',
+        })
 
       let total = await Order.countDocuments();
 
@@ -986,7 +1048,7 @@ module.exports = {
     try {
       let results = await Product.aggregate()
         .lookup({
-          from: 'orders', 
+          from: 'orders',
           localField: '_id',
           foreignField: 'orderDetails.productId',
           as: 'orders',
@@ -995,7 +1057,6 @@ module.exports = {
           orders: { $size: 0 },
         })
         .project({
-          id: 1,
           name: 1,
           price: 1,
           stock: 1,
@@ -1019,64 +1080,64 @@ module.exports = {
     try {
       let { fromDate, toDate } = req.query;
       fromDate = new Date(fromDate);
-  
+
       const tmpToDate = new Date(toDate);
       toDate = new Date(tmpToDate.setDate(tmpToDate.getDate() + 1));
-  
+
       let results = await Product.aggregate()
-      .lookup({
-        from: 'orders',
-        localField: '_id',
-        foreignField: 'orderDetails.productId',
-        as: 'orders',
-      })
-      .unwind({
-        path: '$orders',
-        preserveNullAndEmptyArrays: true,
-      })
-      .match({
-        $or: [
-          {
-            $and: [
-              { orders: { $ne: null } },
-              {
-                $or: [
-                  { 'orders.createdDate': { $lte: fromDate } },
-                  { 'orders.createdDate': { $gte: toDate } },
-                ],
-              },
-            ],
-          },
-          {
-            orders: null,
-          },
-        ],
-      })
-      .lookup({
-        from: 'suppliers',
-        localField: 'supplierId',
-        foreignField: '_id',
-        as: 'suppliers',
-      })
-      .project({
-        _id: 0,
-        suppliers: 1,
-      })
-      .unwind('suppliers')
-      .project({
-        _id: '$suppliers._id',
-        name: '$suppliers.name',
-        email: '$suppliers.email',
-        phoneNumber: '$suppliers.phoneNumber',
-        address: '$suppliers.address',
-      })
-      .group({
-        _id: '$_id',
-        name: { $first: '$name' },
-        phoneNumber: { $first: '$phoneNumber' },
-        email: { $first: '$email' },
-        address: { $first: '$address' },
-      })
+        .lookup({
+          from: 'orders',
+          localField: '_id',
+          foreignField: 'orderDetails.productId',
+          as: 'orders',
+        })
+        .unwind({
+          path: '$orders',
+          preserveNullAndEmptyArrays: true,
+        })
+        .match({
+          $or: [
+            {
+              $and: [
+                { orders: { $ne: null } },
+                {
+                  $or: [
+                    { 'orders.createdDate': { $lte: fromDate } },
+                    { 'orders.createdDate': { $gte: toDate } },
+                  ],
+                },
+              ],
+            },
+            {
+              orders: null,
+            },
+          ],
+        })
+        .lookup({
+          from: 'suppliers',
+          localField: 'supplierId',
+          foreignField: '_id',
+          as: 'suppliers',
+        })
+        .project({
+          _id: 0,
+          suppliers: 1,
+        })
+        .unwind('suppliers')
+        .project({
+          _id: '$suppliers._id',
+          name: '$suppliers.name',
+          email: '$suppliers.email',
+          phoneNumber: '$suppliers.phoneNumber',
+          address: '$suppliers.address',
+        })
+        .group({
+          _id: '$_id',
+          name: { $first: '$name' },
+          phoneNumber: { $first: '$phoneNumber' },
+          email: { $first: '$email' },
+          address: { $first: '$address' },
+        })
 
       let total = await Product.countDocuments();
 
@@ -1096,31 +1157,31 @@ module.exports = {
     try {
       let { fromDate, toDate } = req.query;
       fromDate = new Date(fromDate);
-  
+
       const tmpToDate = new Date(toDate);
       toDate = new Date(tmpToDate.setDate(tmpToDate.getDate() + 1));
-  
+
       let results = await Supplier.aggregate()
-      .lookup({
-        from: 'products',
-        localField: '_id',
-        foreignField: 'supplierId',
-        as: 'products',
-      })
-      .unwind({
-        path: '$products',
-        preserveNullAndEmptyArrays: true,
-      })
-      .lookup({
-        from: 'orders',
-        localField: 'products._id',
-        foreignField: 'orderDetails.productId',
-        as: 'orders',
-      })
-      .unwind({
-        path: '$orders',
-        preserveNullAndEmptyArrays: true,
-      })
+        .lookup({
+          from: 'products',
+          localField: '_id',
+          foreignField: 'supplierId',
+          as: 'products',
+        })
+        .unwind({
+          path: '$products',
+          preserveNullAndEmptyArrays: true,
+        })
+        .lookup({
+          from: 'orders',
+          localField: 'products._id',
+          foreignField: 'orderDetails.productId',
+          as: 'orders',
+        })
+        .unwind({
+          path: '$orders',
+          preserveNullAndEmptyArrays: true,
+        })
       // .match({
       //   $or: [
       //     {
@@ -1184,7 +1245,7 @@ module.exports = {
     try {
       let results = await Product.aggregate()
         .lookup({
-          from: 'orders', 
+          from: 'orders',
           localField: '_id',
           foreignField: 'orderDetails.productId',
           as: 'orders',
@@ -1235,52 +1296,54 @@ module.exports = {
       const conditionFind = getQueryDateTime(fromDate, toDate);
 
       let results = await Order.aggregate()
-      .match(conditionFind)
-      .unwind('orderDetails')
-      .addFields({
-        'orderDetails.originalPrice': {
-          $divide: [
-            {
-              $multiply: [
-                '$orderDetails.price',
-                { $subtract: [100, '$orderDetails.discount'] },
-              ],
-            },
-            100,
-          ],
-        },
-      })
-      .group({
-        _id: '$employeeId',
-        // firstName: { $first: '$employees.firstName' },
-        // lastName: { $first: '$employees.lastName' },
-        // email: { $first: '$employees.email' },
-        // phoneNumber: { $first: '$employees.phoneNumber' },
-        // address: { $first: '$employees.address' },
-        // birthday: { $first: '$employees.birthday' },
-        totalSales: {
-          $sum: { $multiply: ['$orderDetails.originalPrice', '$orderDetails.quantity'] },
-        },
-      })
-      .lookup({
-        from: 'employees',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'employees',
-      })
-      .unwind('employees')
-      .project({
-        employeeId: '$_id',
-        firstName: '$employees.firstName',
-        lastName: '$employees.lastName',
-        phoneNumber: '$employees.phoneNumber',
-        address: '$employees.address',
-        email: '$employees.email',
-        totalSales: 1,
-      })
-      .sort({ totalSales: -1 })
-      .limit(3)
-      .skip(0);
+        .match(conditionFind)
+        .unwind('orderDetails')
+        .addFields({
+          'orderDetails.originalPrice': {
+            $divide: [
+              {
+                $multiply: [
+                  '$orderDetails.price',
+                  { $subtract: [100, '$orderDetails.discount'] },
+                  // '$orderDetails.quantity',
+                ],
+              },
+              100,
+            ],
+          },
+        })
+        .group({
+          _id: '$employeeId',
+          // firstName: { $first: '$employees.firstName' },
+          // lastName: { $first: '$employees.lastName' },
+          // email: { $first: '$employees.email' },
+          // phoneNumber: { $first: '$employees.phoneNumber' },
+          // address: { $first: '$employees.address' },
+          // birthday: { $first: '$employees.birthday' },
+          totalSales: {
+            // $sum: '$orderDetails.originalPrice',
+            $sum: { $multiply: ['$orderDetails.originalPrice', '$orderDetails.quantity'] },
+          },
+        })
+        .lookup({
+          from: 'employees',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'employees',
+        })
+        .unwind('employees')
+        .project({
+          employeeId: '$_id',
+          firstName: '$employees.firstName',
+          lastName: '$employees.lastName',
+          phoneNumber: '$employees.phoneNumber',
+          address: '$employees.address',
+          email: '$employees.email',
+          totalSales: 1,
+        })
+        .sort({ totalSales: -1 })
+        .limit(3)
+        .skip(0);
 
       // .group({
       //   _id: '$totalSales',
@@ -1324,52 +1387,52 @@ module.exports = {
   question30: async (req, res, next) => {
     try {
       let results = await Category.aggregate()
-      .lookup({
-        from: 'products',
-        localField: '_id',
-        foreignField: 'categoryId',
-        as: 'products'
-      })
-      .unwind({
-        path: '$products',
-        preserveNullAndEmptyArrays: true,
-      })
-      .lookup({
-        from: 'orders',
-        localField: 'products._id',
-        foreignField: 'orderDetails.productId',
-        as: 'orders'
-      })
-      .unwind({
-        path: '$orders',
-        preserveNullAndEmptyArrays: true,
-      })
-      .unwind({
-        path: '$orders.orderDetails',
-        preserveNullAndEmptyArrays: true,
-      })
-      .addFields({
-        originalPrice: {
-          $divide: [
-            {
-              $multiply: [
-                '$orders.orderDetails.price',
-                { $subtract: [100, '$orders.orderDetails.discount'] },
-              ],
-            },
-            100,
-          ],
-        },
-        amount: '$orders.orderDetails.quantity',
-      })
-      .group({
-        _id: '$_id',
-        name: { $first: '$name' },
-        description: { $first: '$description' },
-        total: {
-          $sum: { $multiply: ['$originalPrice', '$amount'] },
-        },
-      })
+        .lookup({
+          from: 'products',
+          localField: '_id',
+          foreignField: 'categoryId',
+          as: 'products'
+        })
+        .unwind({
+          path: '$products',
+          preserveNullAndEmptyArrays: true,
+        })
+        .lookup({
+          from: 'orders',
+          localField: 'products._id',
+          foreignField: 'orderDetails.productId',
+          as: 'orders'
+        })
+        .unwind({
+          path: '$orders',
+          preserveNullAndEmptyArrays: true,
+        })
+        .unwind({
+          path: '$orders.orderDetails',
+          preserveNullAndEmptyArrays: true,
+        })
+        .addFields({
+          originalPrice: {
+            $divide: [
+              {
+                $multiply: [
+                  '$orders.orderDetails.price',
+                  { $subtract: [100, '$orders.orderDetails.discount'] },
+                ],
+              },
+              100,
+            ],
+          },
+          amount: '$orders.orderDetails.quantity',
+        })
+        .group({
+          _id: '$_id',
+          name: { $first: '$name' },
+          description: { $first: '$description' },
+          total: {
+            $sum: { $multiply: ['$originalPrice', '$amount'] },
+          },
+        })
 
       let total = await Order.countDocuments();
 
@@ -1391,40 +1454,40 @@ module.exports = {
       const conditionFind = getQueryDateTime(fromDate, toDate);
 
       let results = await Order.aggregate()
-      .match(conditionFind)
-      .unwind('orderDetails')
-      .addFields({
-        originalPrice: {
-          $divide: [
-            {
-              $multiply: [
-                '$orderDetails.price',
-                { $subtract: [100, '$orderDetails.discount'] },
-              ],
-            },
-            100,
-          ],
-        },
-      })
-      .group({
-        _id: '$orderDetails._id',
-        createdDate: { $first: '$createdDate' },
-        shippedDate: { $first: '$shippedDate' },
-        status: { $first: '$status' },
-        shippingAddress: { $first: '$shippingAddress' },
-        description: { $first: '$description' },
-        total: {
-          $sum: { $multiply: ['$originalPrice', '$orderDetails.quantity'] },
-        },
-      })
-      .group({
-        _id: null,
-        avg: { $avg: '$total' },
-      })
-      .project({
-        _id: 0,
-        avg: 1,
-      })
+        .match(conditionFind)
+        .unwind('orderDetails')
+        .addFields({
+          originalPrice: {
+            $divide: [
+              {
+                $multiply: [
+                  '$orderDetails.price',
+                  { $subtract: [100, '$orderDetails.discount'] },
+                ],
+              },
+              100,
+            ],
+          },
+        })
+        .group({
+          _id: '$orderDetails._id',
+          createdDate: { $first: '$createdDate' },
+          shippedDate: { $first: '$shippedDate' },
+          status: { $first: '$status' },
+          shippingAddress: { $first: '$shippingAddress' },
+          description: { $first: '$description' },
+          total: {
+            $sum: { $multiply: ['$originalPrice', '$orderDetails.quantity'] },
+          },
+        })
+        .group({
+          _id: null,
+          avg: { $avg: '$total' },
+        })
+        .project({
+          _id: 0,
+          avg: 1,
+        })
 
       let total = await Order.countDocuments();
 
@@ -1446,40 +1509,44 @@ module.exports = {
       const conditionFind = getQueryDateTime(fromDate, toDate);
 
       let results = await Order.aggregate()
-      .match(conditionFind)
-      .unwind('orderDetails')
-      .addFields({
-        originalPrice: {
-          $divide: [
-            {
-              $multiply: [
-                '$orderDetails.price',
-                { $subtract: [100, '$orderDetails.discount'] },
-              ],
-            },
-            100,
-          ],
-        },
-      })
-      .group({
-        _id: '$_id',
-        createdDate: { $first: '$createdDate' },
-        shippedDate: { $first: '$shippedDate' },
-        status: { $first: '$status' },
-        shippingAddress: { $first: '$shippingAddress' },
-        description: { $first: '$description' },
-        total: {
-          $sum: { $multiply: ['$originalPrice', '$orderDetails.quantity'] },
-        },
-      })
-      .group({
-        _id: null,
-        avg: { $avg: '$total' },
-      })
-      .project({
-        _id: 0,
-        avg: 1,
-      })
+        .match(conditionFind)
+        .unwind('orderDetails')
+        .addFields({
+          originalPrice: {
+            $divide: [
+              {
+                $multiply: [
+                  '$orderDetails.price',
+                  { $subtract: [100, '$orderDetails.discount'] },
+                ],
+              },
+              100,
+            ],
+          },
+        })
+        .group({
+          _id: '$_id',
+          createdDate: { $first: '$createdDate' },
+          shippedDate: { $first: '$shippedDate' },
+          status: { $first: '$status' },
+          shippingAddress: { $first: '$shippingAddress' },
+          description: { $first: '$description' },
+          total: {
+            $sum: { $multiply: ['$originalPrice', '$orderDetails.quantity'] },
+          },
+        })
+        .group({
+          _id: null,
+          avg: { $avg: '$total' },
+          total: { $sum: '$total' },
+          count: { $sum: 1 },
+        })
+        .project({
+          _id: 0,
+          avg: 1,
+          total: 1,
+          count: 1,
+        })
 
       let total = await Order.countDocuments();
 
@@ -1494,5 +1561,4 @@ module.exports = {
       return res.status(500).json({ code: 500, error: err });
     }
   },
-
 };
