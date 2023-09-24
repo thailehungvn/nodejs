@@ -173,7 +173,6 @@ module.exports = {
 
       return res.status(400).json({ message: "Update failed" });
     } catch (error) {
-      console.log('««««« error »»»»»', error);
       return res.send(404, {
         message: "Có lỗi",
         error,

@@ -87,7 +87,6 @@ module.exports = {
         discount: { $lte: 10 },
       };
 
-      console.log('««««« conditionFind »»»»»', conditionFind);
 
       let results = await Product.find(conditionFind)
         .populate('supplier')
